@@ -31,11 +31,15 @@ C_SOURCES = \
 	kernel/drivers/terminal.c \
 	kernel/drivers/keyboard.c \
 	kernel/memory/memory.c \
+	kernel/memory/paging.c \
+	kernel/memory/heap.c \
+	kernel/task/task.c \
 	kernel/shell/shell.c
 
 ASM_SOURCES = \
 	boot/boot.asm \
-	kernel/cpu/interrupts.asm
+	kernel/cpu/interrupts.asm \
+	kernel/cpu/task_switch.asm
 
 C_OBJECTS = $(patsubst %.c,$(BUILD)/%.o,$(C_SOURCES))
 ASM_OBJECTS = $(patsubst %.asm,$(BUILD)/%.o,$(ASM_SOURCES))
