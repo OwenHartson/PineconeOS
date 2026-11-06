@@ -10,6 +10,7 @@
 #include "include/task.h"
 #include "include/pit.h"
 #include "include/ata.h"
+#include "include/fat32.h"
 
 extern void shell_run(void);
 
@@ -39,26 +40,24 @@ void kernel_main(uint32_t multiboot_magic,
 
     /* Initialize ATA subsystem. */
     ata_initialize();
-    static uint16_t disk_test_buffer[256];
+    /*
+    * Update 9: FAT32 filesystem test
+    */
     if (ata_get_device_count() > 0)
     {
-        terminal_write("[ATA TEST] Reading sector 0...\n");
+        terminal_write("[FAT32] Attempting filesystem mount...\n");
 
-        if (ata_read_sector(
-            0,
-            0,
-            disk_test_buffer
-        ) == 0)
+        if (fat32_mount(0) == 0)
         {
-            terminal_write("[ATA TEST] Sector read successful.\n");
+            terminal_write("[FAT32] Filesystem mounted successfully.\n");
+
+            fat32_list_root();
         }
         else
         {
-            terminal_write("[ATA TEST] Sector read failed.\n");
+            terminal_write("[FAT32] No mountable filesystem found.\n");
         }
     }
-
-
 
     /* Initialize task management. */
     scheduler_initialize();

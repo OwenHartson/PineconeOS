@@ -31,6 +31,7 @@ C_SOURCES = \
 	kernel/drivers/terminal.c \
 	kernel/drivers/keyboard.c \
 	kernel/drivers/ata.c \
+	kernel/filesystem/fat32.c \
 	kernel/drivers/pit.c \
 	kernel/memory/memory.c \
 	kernel/memory/paging.c \
