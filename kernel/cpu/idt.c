@@ -3,6 +3,7 @@
 #include "../include/io.h"
 #include "../include/terminal.h"
 #include "../include/keyboard.h"
+#include "../include/pit.h"
 
 struct idt_entry {
     uint16_t base_low;
@@ -64,8 +65,17 @@ static void pic_remap(void)
     outb(0xA1, 0x01);
     io_wait();
 
-    /* Enable keyboard IRQ only */
-    outb(0x21, 0xFD);
+    /*
+     * Master PIC:
+     * IRQ0 = PIT timer (enabled)
+     * IRQ1 = Keyboard (enabled)
+     * All other IRQs masked.
+     *
+     * 0xFC = 11111100
+     */
+    outb(0x21, 0xFC);
+
+    /* Mask all slave PIC interrupts for now. */
     outb(0xA1, 0xFF);
 }
 
@@ -93,7 +103,9 @@ void interrupt_dispatch(uint32_t* frame)
 {
     uint32_t interrupt_number = frame[12];
 
-    /* CPU exception */
+    /*
+     * CPU exception
+     */
     if (interrupt_number < 32)
     {
         terminal_write("\n\n");
@@ -109,16 +121,44 @@ void interrupt_dispatch(uint32_t* frame)
             __asm__ volatile ("hlt");
     }
 
-    /* Keyboard interrupt */
-    if (interrupt_number == 33)
+    /*
+     * Hardware interrupts: IRQ0 through IRQ15
+     *
+     * Vectors 32-47 correspond to IRQ0-IRQ15
+     */
+    if (interrupt_number >= 32 && interrupt_number <= 47)
     {
-        keyboard_irq_handler();
-    }
+        /*
+         * Send EOI before handling the interrupt.
+         *
+         * This is important because the PIT handler can
+         * trigger a task context switch.
+         */
+        if (interrupt_number >= 40)
+        {
+            /* Acknowledge slave PIC first. */
+            outb(0xA0, 0x20);
+        }
 
-    /* Send end-of-interrupt to the PIC */
-    if (interrupt_number >= 40)
-        outb(0xA0, 0x20);
-
-    if (interrupt_number >= 32)
+        /* Acknowledge master PIC. */
         outb(0x20, 0x20);
+
+        /*
+         * IRQ0: Programmable Interval Timer
+         */
+        if (interrupt_number == 32)
+        {
+            pit_interrupt_handler();
+        }
+
+        /*
+         * IRQ1: Keyboard
+         */
+        else if (interrupt_number == 33)
+        {
+            keyboard_irq_handler();
+        }
+
+        return;
+    }
 }

@@ -3,6 +3,7 @@
 #include "../include/task.h"
 #include "../include/heap.h"
 #include "../include/terminal.h"
+#include "../include/pit.h"
 
 #define TASK_STACK_MAGIC 0x50494E45
 
@@ -19,6 +20,95 @@ static uint32_t scheduler_ready = 0;
 
 static void task_bootstrap(void);
 static void scheduler_switch_to(task_t* next);
+
+void scheduler_set_task_priority(uint32_t task_id, uint8_t priority)
+{
+    if (!task_list)
+        return;
+
+    if (priority < 1)
+        priority = 1;
+
+    if (priority > 5)
+        priority = 5;
+
+    task_t* current = task_list;
+
+    do
+    {
+        if (current->id == task_id)
+        {
+            current->priority = priority;
+            return;
+        }
+
+        current = current->next;
+
+    } while (current != task_list);
+}
+
+static void scheduler_wake_sleeping_tasks(void)
+{
+    uint32_t ticks = pit_get_ticks();
+
+    if (!task_list)
+        return;
+
+    task_t* current = task_list;
+
+    do
+    {
+        if (current->state == TASK_SLEEPING)
+        {
+            if ((int32_t)(ticks - current->wake_tick) >= 0)
+            {
+                current->state = TASK_READY;
+            }
+        }
+
+        current = current->next;
+
+    } while (current != task_list);
+}
+
+void scheduler_timer_tick(void)
+{
+    if (!scheduler_ready || !current_task)
+        return;
+
+    scheduler_wake_sleeping_tasks();
+
+    task_yield();
+}
+
+void task_sleep(uint32_t milliseconds)
+{
+    if (!scheduler_ready || !current_task)
+        return;
+
+    if (milliseconds == 0)
+    {
+        task_yield();
+        return;
+    }
+
+    uint32_t ticks =
+        (milliseconds * 100 + 999) / 1000;
+
+    if (ticks == 0)
+        ticks = 1;
+
+    /*
+     * The current PIT frequency is initially 100 Hz.
+     * This calculation will be generalized later.
+     */
+    current_task->wake_tick =
+        pit_get_ticks() + ticks;
+
+    current_task->state = TASK_SLEEPING;
+
+    task_yield();
+}
 
 /*
  * Initialize the first task.
@@ -41,6 +131,8 @@ void scheduler_initialize(void)
     main_task->stack = 0;
     main_task->entry_point = 0;
     main_task->state = TASK_RUNNING;
+    main_task->priority = 1;
+    main_task->wake_tick = 0;
     main_task->next = main_task;
 
     task_list = main_task;
@@ -94,6 +186,8 @@ int task_create(void (*entry_point)(void))
     task->stack = stack;
     task->entry_point = entry_point;
     task->state = TASK_READY;
+    task->priority = 1;
+    task->wake_tick = 0;
 
     /*
      * Insert the new task at the end of the circular list.
@@ -166,15 +260,13 @@ void task_yield(void)
  */
 static void task_bootstrap(void)
 {
+    __asm__ volatile ("sti");
+
     if (!current_task || !current_task->entry_point)
         task_exit();
 
     current_task->entry_point();
 
-    /*
-     * If the task function returns,
-     * terminate the task automatically.
-     */
     task_exit();
 
     while (1)

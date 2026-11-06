@@ -30,6 +30,8 @@ C_SOURCES = \
 	kernel/cpu/idt.c \
 	kernel/drivers/terminal.c \
 	kernel/drivers/keyboard.c \
+	kernel/drivers/ata.c \
+	kernel/drivers/pit.c \
 	kernel/memory/memory.c \
 	kernel/memory/paging.c \
 	kernel/memory/heap.c \

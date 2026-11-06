@@ -8,32 +8,10 @@
 #include "include/paging.h"
 #include "include/heap.h"
 #include "include/task.h"
+#include "include/pit.h"
+#include "include/ata.h"
 
 extern void shell_run(void);
-
-static void task_one(void)
-{
-    for (int i = 1; i <= 3; i++)
-    {
-        terminal_write("[TASK 1] Running...\n");
-
-        task_yield();
-    }
-
-    terminal_write("[TASK 1] Finished.\n");
-}
-
-static void task_two(void)
-{
-    for (int i = 1; i <= 3; i++)
-    {
-        terminal_write("[TASK 2] Running...\n");
-
-        task_yield();
-    }
-
-    terminal_write("[TASK 2] Finished.\n");
-}
 
 void kernel_main(uint32_t multiboot_magic,
                  uint32_t multiboot_info_address)
@@ -50,6 +28,7 @@ void kernel_main(uint32_t multiboot_magic,
 
     /* Hardware and interrupt initialization */
     keyboard_initialize();
+
     idt_initialize();
 
     /* Virtual memory management */
@@ -58,21 +37,46 @@ void kernel_main(uint32_t multiboot_magic,
     /* Initialize dynamic kernel memory. */
     heap_initialize();
 
+    /* Initialize ATA subsystem. */
+    ata_initialize();
+    static uint16_t disk_test_buffer[256];
+    if (ata_get_device_count() > 0)
+    {
+        terminal_write("[ATA TEST] Reading sector 0...\n");
+
+        if (ata_read_sector(
+            0,
+            0,
+            disk_test_buffer
+        ) == 0)
+        {
+            terminal_write("[ATA TEST] Sector read successful.\n");
+        }
+        else
+        {
+            terminal_write("[ATA TEST] Sector read failed.\n");
+        }
+    }
+
+
+
     /* Initialize task management. */
     scheduler_initialize();
+
+    /* Configure the timer before enabling interrupts. */
+    pit_initialize(100);
 
     /* Enable hardware interrupts */
     __asm__ volatile ("sti");
 
+    terminal_write(
+    "========================================\n"
+    "           PINECONE KERNEL\n"
+    "              Version 0.4\n"
+    "========================================\n\n"
+    );
     terminal_write("\n[PINECONE] Kernel initialization complete.\n");
     terminal_write("[PINECONE] Starting system shell...\n\n");
-
-    terminal_write(
-        "========================================\n"
-        "           PINECONE KERNEL\n"
-        "              Version 0.4\n"
-        "========================================\n\n"
-    );
 
     shell_run();
 
